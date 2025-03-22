@@ -1,0 +1,117 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_modify %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <script type="text/javascript" src="{% static 'admin/js/vendor/jquery/jquery.min.js' %}"></script>
+    <script type="text/javascript" src="{% static 'admin/js/jquery.init.js' %}"></script>
+    <script type="text/javascript" src="{% static 'admin/js/core.js' %}"></script>
+    <script type="text/javascript" src="{% static 'admin/js/admin/RelatedObjectLookups.js' %}"></script>
+    <script type="text/javascript" src="{% static 'admin/js/actions.js' %}"></script>
+    <script type="text/javascript" src="{% static 'admin/js/urlify.js' %}"></script>
+    <script type="text/javascript" src="{% static 'admin/js/prepopulate.js' %}"></script>
+    <script type="text/javascript" src="{% static 'admin/js/vendor/xregexp/xregexp.min.js' %}"></script>
+    <script type="text/javascript" src="{% static 'js/queue_admin.js' %}"></script>
+{% endblock %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    <link rel="stylesheet" type="text/css" href="{% static 'admin/css/forms.css' %}">
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">首页</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label='navigation' %}">排队系统</a>
+    &rsaquo; <a href="{% url 'admin:navigation_queue_changelist' %}">排队队列</a>
+    &rsaquo; 添加排队
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <form method="post" id="queue_form" novalidate>
+        {% csrf_token %}
+        
+        <div class="module aligned">
+            <h2>添加排队</h2>
+            
+            {% if messages %}
+            <ul class="messagelist">
+                {% for message in messages %}
+                <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            
+            <div class="form-row field-patient">
+                <div>
+                    <label class="required" for="id_patient">患者:</label>
+                    <select name="patient" id="id_patient" required>
+                        <option value="">---------</option>
+                        {% for patient in patients %}
+                        <option value="{{ patient.id }}">{{ patient.name }} ({{ patient.medical_record_number }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-row field-department">
+                <div>
+                    <label class="required" for="id_department">科室:</label>
+                    <select name="department" id="id_department" required>
+                        <option value="">---------</option>
+                        {% for department in departments %}
+                        <option value="{{ department.id }}">{{ department.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-row field-examination">
+                <div>
+                    <label class="required" for="id_examination">检查项目:</label>
+                    <select name="examination" id="id_examination" required disabled>
+                        <option value="">---------</option>
+                    </select>
+                    <p class="help">请先选择科室</p>
+                </div>
+            </div>
+            
+            <div class="form-row field-equipment">
+                <div>
+                    <label for="id_equipment">设备:</label>
+                    <select name="equipment" id="id_equipment">
+                        <option value="">---------</option>
+                    </select>
+                    <p class="help">可选项。如不指定，将由系统自动分配</p>
+                </div>
+            </div>
+            
+            <div class="form-row field-priority">
+                <div>
+                    <label class="required" for="id_priority">优先级:</label>
+                    <select name="priority" id="id_priority" required>
+                        <option value="0">正常</option>
+                        <option value="1">加急</option>
+                        <option value="2">紧急</option>
+                        <option value="3">危急</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-row field-notes">
+                <div>
+                    <label for="id_notes">备注:</label>
+                    <textarea name="notes" id="id_notes" cols="40" rows="4"></textarea>
+                </div>
+            </div>
+        </div>
+        
+        <div class="submit-row">
+            <input type="submit" value="添加排队" class="default" name="_save">
+            <a href="{% url 'admin:navigation_queue_changelist' %}" class="button">取消</a>
+        </div>
+    </form>
+</div>
+{% endblock %} 

@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>医院检验智能排队引导系统</title>
+    <!-- 引入Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- 自定义CSS -->
+    <style>
+        .stats-card {
+            border-radius: 15px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+        .stats-card:hover {
+            transform: translateY(-5px);
+        }
+        .department-card {
+            height: 100%;
+            transition: transform 0.3s;
+        }
+        .department-card:hover {
+            transform: translateY(-5px);
+        }
+        .queue-status {
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+        .waiting {
+            color: #dc3545;
+        }
+        .processing {
+            color: #28a745;
+        }
+        .completed {
+            color: #6c757d;
+        }
+        /* 添加表头排序样式 */
+        .sortable {
+            cursor: pointer;
+            position: relative;
+            padding-right: 20px;
+        }
+        .sortable:hover {
+            background-color: #e9f5ff;
+        }
+        .sortable::after {
+            content: '⇅';
+            position: absolute;
+            right: 5px;
+            color: #999;
+            font-size: 0.8em;
+        }
+        .sortable.asc::after {
+            content: '↑';
+            color: #007bff;
+        }
+        .sortable.desc::after {
+            content: '↓';
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'navigation:home' %}">医院检验智能排队引导系统</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{% url 'navigation:home' %}">首页</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'navigation:department_list' %}">科室列表</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="bg-light p-4 rounded-3">
+                    <h1 class="display-5 fw-bold">欢迎使用医院检验智能排队引导系统</h1>
+                    <p class="fs-4">通过人工智能技术，为患者提供更高效、更便捷的检验排队服务。</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-3 mb-3">
+                <div class="card stats-card bg-primary text-white">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">总患者数</h5>
+                        <p class="display-4">{{ stats.total_patients }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card stats-card bg-warning text-dark">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">等待中</h5>
+                        <p class="display-4">{{ stats.waiting_queues }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card stats-card bg-success text-white">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">检查中</h5>
+                        <p class="display-4">{{ stats.processing_queues }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card stats-card bg-info text-white">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">今日完成</h5>
+                        <p class="display-4">{{ stats.completed_today }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-12">
+                <h2>科室列表</h2>
+                <hr>
+            </div>
+        </div>
+
+        <div class="row">
+            {% for department in departments %}
+            <div class="col-md-4 mb-4">
+                <div class="card department-card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ department.name }}</h5>
+                        <p class="card-text">{{ department.description|truncatechars:100 }}</p>
+                        <p class="card-text">
+                            <span class="badge bg-warning text-dark">等待人数: {{ department.waiting_count }}</span>
+                        </p>
+                    </div>
+                    <div class="card-footer bg-transparent border-top-0">
+                        <a href="{% url 'navigation:queue_info' department.code %}" class="btn btn-primary">查看队列</a>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-12">
+                <div class="alert alert-info">暂无科室信息</div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="row mt-4 mb-4">
+            <div class="col-12">
+                <h2>最近排队</h2>
+                <hr>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="table-responsive">
+                    <table class="table table-striped" id="queuesTable">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-sort="patient">患者</th>
+                                <th class="sortable" data-sort="department">科室</th>
+                                <th class="sortable" data-sort="status">状态</th>
+                                <th class="sortable" data-sort="priority">优先级</th>
+                                <th class="sortable" data-sort="enterTime">进入时间</th>
+                                <th class="sortable" data-sort="estimated">预计等待</th>
+                                <th class="sortable" data-sort="actual">已等待</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for queue in recent_queues %}
+                            <tr>
+                                <td>{{ queue.patient.name }}</td>
+                                <td>{{ queue.department.name }}</td>
+                                <td>
+                                    {% if queue.status == 'waiting' %}
+                                    <span class="badge bg-warning text-dark">等待中</span>
+                                    {% elif queue.status == 'processing' %}
+                                    <span class="badge bg-success">检查中</span>
+                                    {% elif queue.status == 'completed' %}
+                                    <span class="badge bg-secondary">已完成</span>
+                                    {% elif queue.status == 'cancelled' %}
+                                    <span class="badge bg-danger">已取消</span>
+                                    {% else %}
+                                    <span class="badge bg-info">{{ queue.status }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if queue.priority == 3 %}
+                                    <span class="badge bg-danger">紧急</span>
+                                    {% elif queue.priority == 2 %}
+                                    <span class="badge bg-warning text-dark">优先</span>
+                                    {% else %}
+                                    <span class="badge bg-info">普通</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ queue.enter_time|date:'H:i:s' }}</td>
+                                <td>{{ queue.estimated_wait_time }} 分钟</td>
+                                <td>
+                                    {% if queue.status == 'waiting' %}
+                                    <span class="waiting-time" data-enter-time="{{ queue.enter_time|date:'Y-m-d H:i:s' }}">计算中...</span>
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{% url 'navigation:patient_detail' queue.patient.patient_id %}" class="btn btn-sm btn-outline-primary">详情</a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center">暂无排队记录</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-light py-4 mt-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-12 text-center">
+                    <p class="mb-0">© 2023 医院检验智能排队引导系统 - 版权所有</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- 引入Bootstrap JS 和 Popper.js -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- 实时更新等待时间脚本 -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 计算已等待时间
+        function updateWaitingTimes() {
+            const now = new Date();
+            document.querySelectorAll('.waiting-time').forEach(element => {
+                const enterTime = new Date(element.getAttribute('data-enter-time'));
+                if (!isNaN(enterTime.getTime())) {
+                    const diff = Math.floor((now - enterTime) / (1000 * 60)); // 转换为分钟
+                    element.textContent = `${diff} 分钟`;
+                    element.setAttribute('data-value', diff); // 用于排序
+                    
+                    // 获取预计等待时间（通过查找当前行的预计等待时间单元格）
+                    const row = element.closest('tr');
+                    if (row) {
+                        const estimatedCell = row.querySelector('td:nth-child(6)'); // 预计等待时间单元格
+                        if (estimatedCell) {
+                            const estimatedText = estimatedCell.textContent;
+                            const estimatedTime = parseInt(estimatedText);
+                            
+                            // 如果已等待超过预计等待，高亮显示
+                            if (!isNaN(estimatedTime) && diff > estimatedTime) {
+                                element.style.color = '#dc3545';
+                                element.style.fontWeight = 'bold';
+                            }
+                        }
+                    }
+                } else {
+                    element.textContent = '数据异常';
+                    element.setAttribute('data-value', -1); // 用于排序
+                }
+            });
+        }
+        
+        // 表格排序功能
+        function initTableSort() {
+            // 查找所有可排序的表头
+            document.querySelectorAll('.sortable').forEach(headerCell => {
+                headerCell.addEventListener('click', function() {
+                    const table = this.closest('table');
+                    const columnIndex = this.cellIndex;
+                    const sortType = this.getAttribute('data-sort');
+                    const rows = Array.from(table.querySelectorAll('tbody tr'));
+                    const isEmptyRow = rows.length === 1 && rows[0].querySelector('td').colSpan > 1;
+                    
+                    // 如果是空表格，不进行排序
+                    if (isEmptyRow) return;
+                    
+                    // 清除所有表头排序状态
+                    table.querySelectorAll('th').forEach(th => {
+                        if (th !== this) {
+                            th.classList.remove('asc', 'desc');
+                        }
+                    });
+                    
+                    // 确定排序方向
+                    const isAsc = !this.classList.contains('asc');
+                    this.classList.toggle('asc', isAsc);
+                    this.classList.toggle('desc', !isAsc);
+                    
+                    // 根据单元格内容对行进行排序
+                    rows.sort((a, b) => {
+                        let aValue, bValue;
+                        
+                        // 对于已等待时间，使用data-value属性
+                        if (sortType === 'actual' && columnIndex === 6) {
+                            const aCell = a.querySelector('td:nth-child(' + (columnIndex + 1) + ') .waiting-time');
+                            const bCell = b.querySelector('td:nth-child(' + (columnIndex + 1) + ') .waiting-time');
+                            
+                            aValue = aCell ? parseInt(aCell.getAttribute('data-value')) || 0 : 0;
+                            bValue = bCell ? parseInt(bCell.getAttribute('data-value')) || 0 : 0;
+                        } 
+                        // 对于预计等待时间，提取数字
+                        else if (sortType === 'estimated' && columnIndex === 5) {
+                            aValue = parseInt(a.querySelector('td:nth-child(' + (columnIndex + 1) + ')').textContent) || 0;
+                            bValue = parseInt(b.querySelector('td:nth-child(' + (columnIndex + 1) + ')').textContent) || 0;
+                        }
+                        // 对于进入时间，使用时间比较
+                        else if (sortType === 'enterTime') {
+                            const aText = a.querySelector('td:nth-child(' + (columnIndex + 1) + ')').textContent.trim();
+                            const bText = b.querySelector('td:nth-child(' + (columnIndex + 1) + ')').textContent.trim();
+                            // 假设格式为 HH:MM:SS
+                            const aTimeParts = aText.split(':');
+                            const bTimeParts = bText.split(':');
+                            
+                            if (aTimeParts.length === 3 && bTimeParts.length === 3) {
+                                const aTimeValue = parseInt(aTimeParts[0]) * 3600 + parseInt(aTimeParts[1]) * 60 + parseInt(aTimeParts[2]);
+                                const bTimeValue = parseInt(bTimeParts[0]) * 3600 + parseInt(bTimeParts[1]) * 60 + parseInt(bTimeParts[2]);
+                                aValue = aTimeValue;
+                                bValue = bTimeValue;
+                            } else {
+                                aValue = aText;
+                                bValue = bText;
+                            }
+                        }
+                        // 对于优先级，特殊处理badge文本
+                        else if (sortType === 'priority') {
+                            const aBadge = a.querySelector('td:nth-child(' + (columnIndex + 1) + ') .badge');
+                            const bBadge = b.querySelector('td:nth-child(' + (columnIndex + 1) + ') .badge');
+                            
+                            // 根据优先级文本映射到数值
+                            const getPriorityValue = (badge) => {
+                                if (!badge) return 0;
+                                const text = badge.textContent.trim();
+                                if (text === '紧急') return 3;
+                                if (text === '优先') return 2;
+                                if (text === '普通') return 1;
+                                return 0;
+                            };
+                            
+                            aValue = getPriorityValue(aBadge);
+                            bValue = getPriorityValue(bBadge);
+                        }
+                        // 对于状态，特殊处理badge文本
+                        else if (sortType === 'status') {
+                            const aBadge = a.querySelector('td:nth-child(' + (columnIndex + 1) + ') .badge');
+                            const bBadge = b.querySelector('td:nth-child(' + (columnIndex + 1) + ') .badge');
+                            
+                            // 根据状态文本映射到数值
+                            const getStatusValue = (badge) => {
+                                if (!badge) return 0;
+                                const text = badge.textContent.trim();
+                                if (text === '等待中') return 1;
+                                if (text === '检查中') return 2;
+                                if (text === '已完成') return 3;
+                                if (text === '已取消') return 4;
+                                return 0;
+                            };
+                            
+                            aValue = getStatusValue(aBadge);
+                            bValue = getStatusValue(bBadge);
+                        }
+                        // 其他情况，文本比较
+                        else {
+                            aValue = a.querySelector('td:nth-child(' + (columnIndex + 1) + ')').textContent.trim();
+                            bValue = b.querySelector('td:nth-child(' + (columnIndex + 1) + ')').textContent.trim();
+                        }
+                        
+                        // 根据排序方向返回比较结果
+                        if (typeof aValue === 'number' && typeof bValue === 'number') {
+                            return isAsc ? aValue - bValue : bValue - aValue;
+                        } else {
+                            return isAsc 
+                                ? aValue.localeCompare(bValue, 'zh-CN') 
+                                : bValue.localeCompare(aValue, 'zh-CN');
+                        }
+                    });
+                    
+                    // 重新排列表格行
+                    const tbody = table.querySelector('tbody');
+                    rows.forEach(row => tbody.appendChild(row));
+                });
+            });
+        }
+        
+        // 初始化时计算一次等待时间
+        updateWaitingTimes();
+        
+        // 初始化表格排序
+        initTableSort();
+        
+        // 每分钟更新一次等待时间
+        setInterval(updateWaitingTimes, 60000);
+        
+        // 每分钟自动刷新一次页面
+        setTimeout(function() {
+            window.location.reload();
+        }, 60000);
+    });
+    </script>
+</body>
+</html> 

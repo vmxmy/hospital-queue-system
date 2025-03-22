@@ -1,0 +1,36 @@
+{% extends "admin/index.html" %}
+{% load i18n %}
+
+{% block content %}
+{{ block.super }}
+
+<div class="module" style="margin-top: 20px;">
+    <table style="width: 100%;">
+        <caption>
+            <a href="#" class="section" title="{% trans '机器学习工具' %}">{% trans '机器学习工具' %}</a>
+        </caption>
+        <tbody>
+            <tr>
+                <th scope="row">
+                    <a href="{% url 'navigation:admin_ml_dashboard' %}" style="display: block; padding: 8px 10px;">
+                        {% trans '模型训练与监控' %}
+                    </a>
+                </th>
+                <td style="padding: 8px 10px;">
+                    {% trans '管理和训练等待时间预测模型，查看模型性能指标' %}
+                </td>
+            </tr>
+            <tr>
+                <th scope="row">
+                    <a href="{% url 'navigation:admin_ml_update_wait_times' %}" style="display: block; padding: 8px 10px;">
+                        {% trans '更新所有队列等待时间' %}
+                    </a>
+                </th>
+                <td style="padding: 8px 10px;">
+                    {% trans '使用机器学习模型更新所有队列的预计等待时间' %}
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %} 

@@ -1,0 +1,34 @@
+name: hospitalLane
+channels:
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
+  - defaults
+dependencies:
+  - python=3.11
+  # Web Framework
+  - django
+  - djangorestframework
+  
+  # Database
+  - psycopg2
+  - mysqlclient
+  
+  # Data Science
+  - numpy
+  - pandas
+  - scikit-learn
+  
+  # Development Tools
+  - pip
+  - black
+  - flake8
+  
+  # pip packages
+  - pip:
+    - django-cors-headers
+    - python-dotenv
+    - gunicorn
+    - uvicorn
+    - redis
+    - celery 

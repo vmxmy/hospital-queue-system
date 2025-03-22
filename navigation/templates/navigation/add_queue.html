@@ -1,0 +1,186 @@
+{% extends 'base.html' %}
+
+{% block title %}添加排队 - 医院检验智能排队引导系统{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="text-center">添加排队</h1>
+            <p class="text-center text-muted">请填写以下信息添加患者到排队队列</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">排队信息</h4>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="queueForm">
+                        {% csrf_token %}
+                        
+                        <!-- 患者信息 -->
+                        <div class="mb-3">
+                            <label for="patient" class="form-label">患者</label>
+                            <select name="patient" id="patient" class="form-select" required>
+                                <option value="">-- 请选择患者 --</option>
+                                {% for patient in patients %}
+                                <option value="{{ patient.id }}">{{ patient.name }} ({{ patient.patient_id }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <!-- 科室选择 -->
+                        <div class="mb-3">
+                            <label for="department" class="form-label">科室</label>
+                            <select name="department" id="department" class="form-select" required>
+                                <option value="">-- 请选择科室 --</option>
+                                {% for dept in departments %}
+                                <option value="{{ dept.id }}">{{ dept.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <!-- 检查项目选择 -->
+                        <div class="mb-3">
+                            <label for="examination" class="form-label">检查项目</label>
+                            <select name="examination" id="examination" class="form-select" required disabled>
+                                <option value="">-- 请先选择科室 --</option>
+                            </select>
+                        </div>
+                        
+                        <!-- 设备选择 -->
+                        <div class="mb-3">
+                            <label for="equipment" class="form-label">设备(可选)</label>
+                            <select name="equipment" id="equipment" class="form-select">
+                                <option value="">-- 无需指定 --</option>
+                            </select>
+                        </div>
+                        
+                        <!-- 优先级 -->
+                        <div class="mb-3">
+                            <label for="priority" class="form-label">优先级</label>
+                            <select name="priority" id="priority" class="form-select" required>
+                                <option value="0">正常</option>
+                                <option value="1">加急</option>
+                                <option value="2">紧急</option>
+                                <option value="3">危急</option>
+                            </select>
+                        </div>
+                        
+                        <!-- 备注 -->
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">备注</label>
+                            <textarea name="notes" id="notes" class="form-control" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">添加到队列</button>
+                            <a href="{% url 'navigation:index' %}" class="btn btn-outline-secondary">取消</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const departmentSelect = document.getElementById('department');
+    const examinationSelect = document.getElementById('examination');
+    const equipmentSelect = document.getElementById('equipment');
+    
+    // 当科室选择变化时
+    departmentSelect.addEventListener('change', function() {
+        const departmentId = this.value;
+        
+        // 清空并禁用检查项目选择框
+        examinationSelect.innerHTML = '<option value="">-- 请选择检查项目 --</option>';
+        equipmentSelect.innerHTML = '<option value="">-- 无需指定 --</option>';
+        
+        if (!departmentId) {
+            examinationSelect.disabled = true;
+            equipmentSelect.disabled = true;
+            return;
+        }
+        
+        // 启用检查项目选择框
+        examinationSelect.disabled = false;
+        
+        // 发起Ajax请求获取该科室的检查项目
+        fetch(`/api/departments/${departmentId}/examinations/`)
+            .then(response => response.json())
+            .then(data => {
+                // 填充检查项目选择框
+                data.forEach(examination => {
+                    const option = document.createElement('option');
+                    option.value = examination.id;
+                    option.textContent = examination.name;
+                    examinationSelect.appendChild(option);
+                });
+            })
+            .catch(error => {
+                console.error('获取检查项目失败:', error);
+                alert('获取检查项目失败，请刷新页面重试');
+            });
+            
+        // 获取该科室的设备
+        fetch(`/api/departments/${departmentId}/equipment/`)
+            .then(response => response.json())
+            .then(data => {
+                equipmentSelect.disabled = false;
+                // 填充设备选择框
+                data.forEach(equipment => {
+                    if (equipment.status === 'available') {
+                        const option = document.createElement('option');
+                        option.value = equipment.id;
+                        option.textContent = `${equipment.name} (${equipment.code})`;
+                        equipmentSelect.appendChild(option);
+                    }
+                });
+            })
+            .catch(error => {
+                console.error('获取设备失败:', error);
+            });
+    });
+    
+    // 当检查项目变化时
+    examinationSelect.addEventListener('change', function() {
+        const examinationId = this.value;
+        const departmentId = departmentSelect.value;
+        
+        if (!examinationId || !departmentId) {
+            return;
+        }
+        
+        // 可以在这里添加获取该检查项目可用设备的逻辑
+        fetch(`/api/examinations/${examinationId}/equipment/`)
+            .then(response => response.json())
+            .then(data => {
+                // 重置设备选择框
+                equipmentSelect.innerHTML = '<option value="">-- 无需指定 --</option>';
+                equipmentSelect.disabled = false;
+                
+                // 填充设备选择框，只显示可用设备
+                data.forEach(equipment => {
+                    if (equipment.status === 'available' && equipment.department.id == departmentId) {
+                        const option = document.createElement('option');
+                        option.value = equipment.id;
+                        option.textContent = `${equipment.name} (${equipment.code})`;
+                        equipmentSelect.appendChild(option);
+                    }
+                });
+            })
+            .catch(error => {
+                console.error('获取设备失败:', error);
+            });
+    });
+});
+</script>
+{% endblock %} 

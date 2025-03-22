@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>医院检验智能排队引导系统</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <style>
+        .stats-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            flex: 1;
+            min-width: 200px;
+            background-color: white;
+            border-radius: 5px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .stat-card h3 {
+            margin-bottom: 10px;
+            color: #1e88e5;
+        }
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+        }
+        .departments-container, .queues-container {
+            background-color: white;
+            border-radius: 5px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        header {
+            background-color: #1e88e5;
+            color: white;
+            padding: 20px 0;
+            margin-bottom: 30px;
+            text-align: center;
+            border-radius: 5px;
+        }
+        /* 添加表格行的交替颜色和悬停效果 */
+        tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tbody tr:hover {
+            background-color: #f2f2f2;
+        }
+        /* 确保表格单元格内容对齐 */
+        td, th {
+            text-align: left;
+            vertical-align: middle;
+        }
+        /* 添加表头排序样式 */
+        .sortable {
+            cursor: pointer;
+            position: relative;
+            padding-right: 20px;
+        }
+        .sortable:hover {
+            background-color: #e9f5ff;
+        }
+        .sortable::after {
+            content: '⇅';
+            position: absolute;
+            right: 5px;
+            color: #999;
+            font-size: 0.8em;
+        }
+        .sortable.asc::after {
+            content: '↑';
+            color: #1e88e5;
+        }
+        .sortable.desc::after {
+            content: '↓';
+            color: #1e88e5;
+        }
+        /* 分页控制样式 */
+        .pagination-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 15px;
+        }
+        .page-size-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .page-size-control select {
+            padding: 5px;
+            border-radius: 3px;
+            border: 1px solid #ddd;
+        }
+        .pagination-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        .pagination-buttons button {
+            padding: 5px 10px;
+            border: 1px solid #ddd;
+            background-color: white;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .pagination-buttons button:hover {
+            background-color: #f5f5f5;
+        }
+        .pagination-buttons button:disabled {
+            cursor: not-allowed;
+            color: #999;
+            background-color: #f9f9f9;
+        }
+        .pagination-info {
+            margin: 0 15px;
+        }
+        .hidden-row {
+            display: none;
+        }
+        /* 筛选相关样式 */
+        .filters-container {
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+        .filtered-row {
+            display: none;
+        }
+        .form-select {
+            width: 100%;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ced4da;
+        }
+        #resetFilters {
+            padding: 8px 16px;
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            height: 38px;
+        }
+        #resetFilters:hover {
+            background-color: #5a6268;
+        }
+        /* 添加处理中状态的样式 */
+        .processing {
+            background-color: #e3f2fd !important;
+        }
+        
+        /* 添加数据更新时的动画效果 */
+        @keyframes highlight {
+            0% { background-color: #fff3cd; }
+            100% { background-color: transparent; }
+        }
+        
+        .highlight {
+            animation: highlight 1s ease-out;
+        }
+        
+        /* 添加连接状态指示器样式 */
+        .connection-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 8px 15px;
+            border-radius: 4px;
+            font-size: 14px;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .connection-status.connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .connection-status.disconnected,
+        .connection-status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .connection-status.connecting {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+
+        .reconnect-btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .reconnect-btn:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 添加连接状态指示器 -->
+        <div id="connectionStatus" class="connection-status">
+            <span class="status-text">正在连接...</span>
+        </div>
+        
+        <header>
+            <h1>医院检验智能排队引导系统</h1>
+            <p>实时监控各科室排队情况，智能引导患者检查流程</p>
+        </header>
+
+        <!-- 在顶部导航或功能按钮区域添加"添加排队"按钮 -->
+        <div class="row mb-4">
+            <div class="col-12 text-end">
+                <a href="{% url 'navigation:add_queue' %}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> 添加排队
+                </a>
+            </div>
+        </div>
+
+        <div class="stats-container">
+            <div class="stat-card">
+                <h3>总患者数</h3>
+                <div class="stat-value">{{ stats.total_patients }}</div>
+            </div>
+            <div class="stat-card">
+                <h3>等待中</h3>
+                <div class="stat-value">{{ stats.waiting_queues }}</div>
+            </div>
+            <div class="stat-card">
+                <h3>处理中</h3>
+                <div class="stat-value">{{ stats.processing_queues }}</div>
+            </div>
+            <div class="stat-card">
+                <h3>今日完成</h3>
+                <div class="stat-value">{{ stats.completed_today }}</div>
+            </div>
+        </div>
+
+        <div class="departments-container">
+            <h2>科室情况</h2>
+            <table id="departmentsTable">
+                <thead>
+                    <tr>
+                        <th class="sortable" data-sort="name" style="width: 35%;">科室名称</th>
+                        <th class="sortable" data-sort="code" style="width: 20%;">代码</th>
+                        <th class="sortable" data-sort="location" style="width: 30%;">位置</th>
+                        <th class="sortable" data-sort="waiting" style="width: 15%;">等待人数</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for dept in departments %}
+                    <tr>
+                        <td>{{ dept.name }}</td>
+                        <td>{{ dept.code }}</td>
+                        <td>{{ dept.location }}</td>
+                        <td>{{ dept.waiting_count }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4">暂无科室信息</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="queues-container">
+            <h2>最近队列</h2>
+            
+            <table id="queuesTable">
+                <thead>
+                    <tr>
+                        <th style="width: 12%;">队列号</th>
+                        <th style="width: 12%;">患者</th>
+                        <th style="width: 12%;">科室</th>
+                        <th style="width: 12%;">检查项目</th>
+                        <th style="width: 10%;">状态</th>
+                        <th style="width: 12%;">前面等待人数</th>
+                        <th style="width: 15%;">预计等待</th>
+                        <th style="width: 15%;">已等待</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for queue in recent_queues %}
+                    <tr>
+                        <td>{{ queue.queue_number }}</td>
+                        <td>{{ queue.patient.name }}</td>
+                        <td>{{ queue.department.name }}</td>
+                        <td>{{ queue.examination.name }}</td>
+                        <td class="status-{{ queue.status }}">{{ queue.get_status_display }}</td>
+                        <td>
+                            {% if queue.status == 'waiting' %}
+                            {{ queue.ahead_count }} 人
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if queue.status == 'waiting' %}
+                            {% if queue.prediction_source %}
+                            <span class="prediction-source {{ queue.prediction_source }}">{{ queue.prediction_source }}</span>
+                            {% endif %}
+                            {{ queue.estimated_wait_time }} 分钟
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if queue.status == 'waiting' %}
+                            <span class="waiting-time" data-enter-time="{{ queue.enter_time|date:'Y-m-d H:i:s' }}">计算中...</span>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8">暂无排队记录</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <!-- 添加分页控制 -->
+            <div class="pagination-controls">
+                <div class="page-size-control">
+                    <span>每页显示:</span>
+                    <select id="pageSizeSelector">
+                        <option value="20" selected>20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="all">全部</option>
+                    </select>
+                </div>
+                <div class="pagination-nav">
+                    <div class="pagination-buttons">
+                        <button id="firstPageBtn" disabled>首页</button>
+                        <button id="prevPageBtn" disabled>上一页</button>
+                        <span class="pagination-info">第 <span id="currentPage">1</span> 页，共 <span id="totalPages">1</span> 页</span>
+                        <button id="nextPageBtn" disabled>下一页</button>
+                        <button id="lastPageBtn" disabled>末页</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 实时更新等待时间脚本 -->
+    <script>
+    // WebSocket 连接
+    let ws = null;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    const reconnectDelay = 3000; // 3秒后重试
+    let connectionStatus = document.getElementById('connectionStatus');
+    let isConnecting = false;
+
+    function updateConnectionStatus(status, message) {
+        if (connectionStatus) {
+            connectionStatus.className = 'connection-status ' + status;
+            connectionStatus.innerHTML = `
+                <span class="status-text">${message}</span>
+                ${status === 'disconnected' ? '<button onclick="reconnectWebSocket()" class="reconnect-btn">重新连接</button>' : ''}
+            `;
+        }
+    }
+
+    function reconnectWebSocket() {
+        if (!isConnecting && (!ws || ws.readyState === WebSocket.CLOSED)) {
+            connectWebSocket();
+        }
+    }
+
+    function connectWebSocket() {
+        if (isConnecting) return;
+        isConnecting = true;
+        
+        updateConnectionStatus('connecting', '正在连接...');
+        
+        const wsScheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+        const wsUrl = `${wsScheme}://${window.location.host}/ws/queue_updates/`;
+        
+        try {
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = function() {
+                console.log('WebSocket 连接已建立');
+                updateConnectionStatus('connected', '已连接');
+                isConnecting = false;
+                reconnectAttempts = 0;
+                
+                // 请求初始数据
+                ws.send(JSON.stringify({
+                    'command': 'get_initial_data'
+                }));
+                
+                // 启动心跳
+                startHeartbeat();
+            };
+
+            ws.onmessage = function(e) {
+                try {
+                    const data = JSON.parse(e.data);
+                    console.log('收到消息:', data.type);
+                    
+                    switch (data.type) {
+                        case 'connection_established':
+                            console.log('连接确认:', data.message);
+                            break;
+                            
+                        case 'initial_data':
+                        case 'queue_update':
+                            updateStats(data.stats);
+                            updateDepartments(data.departments);
+                            updateQueues(data.queues);
+                            addUpdateAnimation();
+                            break;
+                            
+                        case 'error':
+                            console.error('服务器错误:', data.message);
+                            showError(data.message);
+                            break;
+                            
+                        case 'heartbeat_response':
+                            console.log('心跳响应:', data.timestamp);
+                            break;
+                    }
+                } catch (error) {
+                    console.error('处理消息时出错:', error);
+                    showError('处理数据时出错');
+                }
+            };
+
+            ws.onclose = function(e) {
+                console.log('WebSocket 连接已断开:', e.code, e.reason);
+                isConnecting = false;
+                clearInterval(heartbeatInterval);
+                
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    updateConnectionStatus('disconnected', `连接已断开，${reconnectAttempts}秒后重试...`);
+                    setTimeout(connectWebSocket, reconnectDelay);
+                } else {
+                    updateConnectionStatus('disconnected', '连接失败，请手动重试');
+                }
+            };
+
+            ws.onerror = function(err) {
+                console.error('WebSocket 错误:', err);
+                isConnecting = false;
+                updateConnectionStatus('error', '连接错误');
+            };
+        } catch (error) {
+            console.error('创建 WebSocket 时出错:', error);
+            isConnecting = false;
+            updateConnectionStatus('error', '创建连接时出错');
+        }
+    }
+
+    function updateStats(stats) {
+        document.querySelector('.stat-card:nth-child(1) .stat-value').textContent = stats.total_patients;
+        document.querySelector('.stat-card:nth-child(2) .stat-value').textContent = stats.waiting_queues;
+        document.querySelector('.stat-card:nth-child(3) .stat-value').textContent = stats.processing_queues;
+        document.querySelector('.stat-card:nth-child(4) .stat-value').textContent = stats.completed_today;
+    }
+
+    function updateDepartments(departments) {
+        const tbody = document.querySelector('#departmentsTable tbody');
+        tbody.innerHTML = '';
+
+        if (departments.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4">暂无科室信息</td></tr>';
+            return;
+        }
+
+        departments.forEach(dept => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${dept.name}</td>
+                <td>${dept.code}</td>
+                <td>${dept.location}</td>
+                <td>${dept.waiting_count}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    function updateQueues(queues) {
+        // 更新队列表格
+        const tbody = document.querySelector('#queuesTable tbody');
+        tbody.innerHTML = '';
+        
+        if (!queues || queues.length === 0) {
+            const row = document.createElement('tr');
+            row.innerHTML = '<td colspan="8">暂无排队记录</td>';
+            tbody.appendChild(row);
+            return;
+        }
+        
+        // 更新队列数据
+        queues.forEach(queue => {
+            const row = document.createElement('tr');
+            row.setAttribute('data-id', queue.id || '');
+            
+            if (queue.status === 'processing') {
+                row.classList.add('processing');
+            }
+            
+            // 处理预计等待时间，包括预测来源标识符
+            let waitTimeCell = '-';
+            if (queue.status === 'waiting' && queue.estimated_wait_time !== null) {
+                // 生成预测来源标识符
+                let predictionSource = '';
+                if (queue.prediction_source) {
+                    predictionSource = `<span class="prediction-source ${queue.prediction_source}">${queue.prediction_source}</span> `;
+                }
+                waitTimeCell = `${predictionSource}${queue.estimated_wait_time} 分钟`;
+            }
+            
+            let actualWaitTime = '-';
+            if (queue.status === 'waiting' && queue.enter_time) {
+                const enterTime = new Date(queue.enter_time);
+                const now = new Date();
+                const diffMinutes = Math.floor((now - enterTime) / (1000 * 60));
+                actualWaitTime = `${diffMinutes}分钟`;
+            }
+            
+            row.innerHTML = `
+                <td>${queue.queue_number}</td>
+                <td>${queue.patient_name}</td>
+                <td>${queue.department_name}</td>
+                <td>${queue.examination_name}</td>
+                <td>${queue.status === 'waiting' ? '等待中' : '处理中'}</td>
+                <td>${queue.ahead_count ? queue.ahead_count + ' 人' : '-'}</td>
+                <td>${waitTimeCell}</td>
+                <td class="waiting-time" data-enter-time="${queue.enter_time || ''}">${actualWaitTime}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    function addUpdateAnimation() {
+        // 为更新的元素添加高亮动画
+        const elements = [
+            ...document.querySelectorAll('.stat-card'),
+            ...document.querySelectorAll('#departmentsTable tbody tr'),
+            ...document.querySelectorAll('#queuesTable tbody tr')
+        ];
+        
+        elements.forEach(el => {
+            el.classList.add('highlight');
+            setTimeout(() => el.classList.remove('highlight'), 1000);
+        });
+    }
+
+    function showError(message) {
+        // 显示错误消息
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'alert alert-danger';
+        errorDiv.style.position = 'fixed';
+        errorDiv.style.top = '20px';
+        errorDiv.style.right = '20px';
+        errorDiv.style.zIndex = '1000';
+        errorDiv.textContent = message;
+        
+        document.body.appendChild(errorDiv);
+        setTimeout(() => errorDiv.remove(), 5000);
+    }
+
+    let heartbeatInterval;
+    
+    function startHeartbeat() {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                try {
+                    ws.send(JSON.stringify({
+                        'command': 'heartbeat'
+                    }));
+                } catch (error) {
+                    console.error('发送心跳时出错:', error);
+                    clearInterval(heartbeatInterval);
+                }
+            } else {
+                clearInterval(heartbeatInterval);
+            }
+        }, 30000); // 每30秒发送一次心跳
+    }
+
+    // 添加定时更新已等待时间的函数
+    function updateWaitingTimes() {
+        const waitingTimeElements = document.querySelectorAll('.waiting-time');
+        const now = new Date();
+        
+        waitingTimeElements.forEach(element => {
+            const enterTimeStr = element.getAttribute('data-enter-time');
+            if (enterTimeStr) {
+                const enterTime = new Date(enterTimeStr);
+                if (!isNaN(enterTime.getTime())) {
+                    const diffMinutes = Math.floor((now - enterTime) / (1000 * 60));
+                    element.textContent = `${diffMinutes}分钟`;
+                }
+            }
+        });
+    }
+
+    // 页面加载完成后建立 WebSocket 连接
+    document.addEventListener('DOMContentLoaded', function() {
+        connectWebSocket();
+    });
+
+    // 在页面关闭或刷新时关闭 WebSocket 连接
+    window.addEventListener('beforeunload', function() {
+        if (ws) {
+            clearInterval(heartbeatInterval);
+            ws.close();
+        }
+    });
+
+    // 添加页面可见性变化处理
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') {
+            // 页面变为可见时，如果连接断开则重新连接
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                reconnectWebSocket();
+            }
+        }
+    });
+
+    // 添加网络状态变化处理
+    window.addEventListener('online', function() {
+        console.log('网络已恢复');
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            reconnectWebSocket();
+        }
+    });
+
+    window.addEventListener('offline', function() {
+        console.log('网络已断开');
+        updateConnectionStatus('disconnected', '网络已断开');
+    });
+    
+    // 分页功能实现
+    document.addEventListener('DOMContentLoaded', function() {
+        // 获取分页控件元素
+        const pageSizeSelector = document.getElementById('pageSizeSelector');
+        const firstPageBtn = document.getElementById('firstPageBtn');
+        const prevPageBtn = document.getElementById('prevPageBtn');
+        const nextPageBtn = document.getElementById('nextPageBtn');
+        const lastPageBtn = document.getElementById('lastPageBtn');
+        const currentPageSpan = document.getElementById('currentPage');
+        const totalPagesSpan = document.getElementById('totalPages');
+        
+        // 分页状态
+        let currentPage = 1;
+        let pageSize = 20;
+        let totalItems = 0;
+        let totalPages = 1;
+        
+        // 所有队列数据
+        let allQueueData = [];
+        
+        // 初始化分页
+        function initPagination(data) {
+            allQueueData = data || [];
+            totalItems = allQueueData.length;
+            pageSize = parseInt(pageSizeSelector.value) || 20;
+            
+            // 计算总页数
+            totalPages = pageSize === 'all' ? 1 : Math.ceil(totalItems / pageSize);
+            if (totalPages === 0) totalPages = 1;
+            
+            // 确保当前页在有效范围内
+            if (currentPage > totalPages) {
+                currentPage = totalPages;
+            }
+            
+            // 更新分页信息
+            currentPageSpan.textContent = currentPage;
+            totalPagesSpan.textContent = totalPages;
+            
+            // 更新按钮状态
+            updatePaginationButtons();
+            
+            // 显示当前页的数据
+            renderCurrentPage();
+        }
+        
+        // 更新分页按钮状态
+        function updatePaginationButtons() {
+            firstPageBtn.disabled = currentPage === 1;
+            prevPageBtn.disabled = currentPage === 1;
+            nextPageBtn.disabled = currentPage === totalPages;
+            lastPageBtn.disabled = currentPage === totalPages;
+        }
+        
+        // 渲染当前页的数据
+        function renderCurrentPage() {
+            if (!allQueueData || allQueueData.length === 0) {
+                return;
+            }
+            
+            const tbody = document.querySelector('#queuesTable tbody');
+            tbody.innerHTML = '';
+            
+            let displayData;
+            if (pageSize === 'all') {
+                displayData = allQueueData;
+            } else {
+                const start = (currentPage - 1) * pageSize;
+                const end = Math.min(start + pageSize, totalItems);
+                displayData = allQueueData.slice(start, end);
+            }
+            
+            if (displayData.length === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = '<td colspan="8">暂无排队记录</td>';
+                tbody.appendChild(row);
+                return;
+            }
+            
+            // 更新队列数据
+            displayData.forEach(queue => {
+                const row = document.createElement('tr');
+                row.setAttribute('data-id', queue.id || '');
+                
+                if (queue.status === 'processing') {
+                    row.classList.add('processing');
+                }
+                
+                // 处理预计等待时间，包括预测来源标识符
+                let waitTimeCell = '-';
+                if (queue.status === 'waiting' && queue.estimated_wait_time !== null) {
+                    // 生成预测来源标识符
+                    let predictionSource = '';
+                    if (queue.prediction_source) {
+                        predictionSource = `<span class="prediction-source ${queue.prediction_source}">${queue.prediction_source}</span> `;
+                    }
+                    waitTimeCell = `${predictionSource}${queue.estimated_wait_time} 分钟`;
+                }
+                
+                let actualWaitTime = '-';
+                if (queue.status === 'waiting' && queue.enter_time) {
+                    const enterTime = new Date(queue.enter_time);
+                    const now = new Date();
+                    const diffMinutes = Math.floor((now - enterTime) / (1000 * 60));
+                    actualWaitTime = `${diffMinutes}分钟`;
+                }
+                
+                row.innerHTML = `
+                    <td>${queue.queue_number}</td>
+                    <td>${queue.patient_name}</td>
+                    <td>${queue.department_name}</td>
+                    <td>${queue.examination_name}</td>
+                    <td>${queue.status === 'waiting' ? '等待中' : '处理中'}</td>
+                    <td>${queue.ahead_count ? queue.ahead_count + ' 人' : '-'}</td>
+                    <td>${waitTimeCell}</td>
+                    <td class="waiting-time" data-enter-time="${queue.enter_time || ''}">${actualWaitTime}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+        
+        // 页面大小变化事件
+        pageSizeSelector.addEventListener('change', function() {
+            pageSize = this.value;
+            currentPage = 1; // 切换页面大小时重置为第一页
+            initPagination(allQueueData);
+        });
+        
+        // 分页按钮点击事件
+        firstPageBtn.addEventListener('click', function() {
+            if (currentPage > 1) {
+                currentPage = 1;
+                initPagination(allQueueData);
+            }
+        });
+        
+        prevPageBtn.addEventListener('click', function() {
+            if (currentPage > 1) {
+                currentPage--;
+                initPagination(allQueueData);
+            }
+        });
+        
+        nextPageBtn.addEventListener('click', function() {
+            if (currentPage < totalPages) {
+                currentPage++;
+                initPagination(allQueueData);
+            }
+        });
+        
+        lastPageBtn.addEventListener('click', function() {
+            if (currentPage < totalPages) {
+                currentPage = totalPages;
+                initPagination(allQueueData);
+            }
+        });
+        
+        // 重写updateQueues函数，使用分页功能
+        const originalUpdateQueues = updateQueues;
+        updateQueues = function(queues) {
+            initPagination(queues);
+        };
+    });
+    </script>
+</body>
+</html> 
